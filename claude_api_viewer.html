@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude API — JSON viewer</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f5f4f0;
+  color: #1a1a1a;
+  padding: 2rem 1rem;
+  min-height: 100vh;
+}
+
+h1 { font-size: 14px; font-weight: 500; color: #aaa; margin-bottom: 1.5rem; letter-spacing: 0.03em; }
+
+.block { background: #fff; border: 0.5px solid #e0ddd4; border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.block-header { display: flex; align-items: center; gap: 10px; padding: 13px 16px; cursor: pointer; user-select: none; }
+.block-header:hover { background: #faf9f6; }
+.blabel { font-size: 14px; font-weight: 500; flex: 1; }
+.block-body { border-top: 0.5px solid #e0ddd4; padding: 12px 16px 16px; }
+
+.sub { margin-top: 8px; border: 0.5px solid #e0ddd4; border-radius: 8px; overflow: hidden; }
+.sub-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; background: #faf9f6; user-select: none; }
+.sub-header:hover { background: #f2f0eb; }
+.sub-label { font-size: 13px; font-weight: 500; color: #555; flex: 1; }
+.sub-body { padding: 12px; border-top: 0.5px solid #e0ddd4; background: #fff; }
+.sub-body.msg-inner { padding: 8px 12px 12px; }
+
+.arrow { font-size: 10px; color: #ccc; transition: transform .2s; flex-shrink: 0; }
+.arrow.open { transform: rotate(90deg); }
+
+.badge { font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 6px; }
+.badge-post { background: #ddeef9; color: #0c4e8c; }
+.badge-ok   { background: #e5f2d8; color: #2f6010; }
+
+.fields { display: flex; flex-direction: column; gap: 5px; }
+.field  { display: flex; align-items: center; gap: 8px; }
+
+.lbl { font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 5px; font-family: monospace; white-space: nowrap; }
+.field-val { font-size: 13px; color: #333; font-family: monospace; }
+
+.lbl-purple { background: #eeecfe; color: #3c3489; }
+.lbl-teal   { background: #d8f2eb; color: #0d6e56; }
+.lbl-amber  { background: #faeeda; color: #633806; }
+.lbl-gray   { background: #f2f0eb; color: #555; }
+.lbl-white  { background: #fff; color: #333; border: 0.5px solid #ddd; }
+.lbl-black  { background: #1a1a1a; color: #f0ede8; }
+.lbl-yellow { background: #fef9c3; color: #7a6000; }
+.lbl-red    { background: #fde8e8; color: #8b1a1a; }
+.lbl-sky    { background: #e0f2fe; color: #0c4a6e; }
+.lbl-pink   { background: #fbeaf0; color: #6b1f3b; }
+.lbl-violet { background: #f3e8ff; color: #5b21b6; }
+
+.role-user      { font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 5px; background: #fff; color: #333; border: 0.5px solid #ddd; }
+.role-assistant { font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 5px; background: #eeecfe; color: #3c3489; }
+
+.cache-divider { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; }
+.cache-line    { flex: 1; height: 0.5px; background: #e0ddd4; }
+.cache-badge   { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 6px; background: #faeeda; color: #633806; white-space: nowrap; }
+
+/* thinking block */
+.thinking-block {
+  margin-top: 8px;
+  border: 0.5px solid #e4d9f7;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.thinking-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: #f3e8ff;
+  cursor: default;
+  user-select: none;
+}
+.thinking-label { font-size: 12px; font-weight: 500; color: #5b21b6; flex: 1; }
+.thinking-omit {
+  font-size: 11px; color: #9d7bc4;
+  font-style: italic;
+}
+
+/* usage group */
+.badge-hit {
+  font-size: 11px; font-weight: 500;
+  padding: 3px 8px; border-radius: 6px;
+  background: #d8f2eb; color: #0d6e56;
+}
+
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 0;
+}
+.usage-table th {
+  font-weight: 500;
+  color: #0c4a6e;
+  padding: 4px 8px;
+  text-align: left;
+  border-bottom: 0.5px solid #bde0f7;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.usage-table th.num { text-align: right; }
+.usage-table td { padding: 5px 8px; border-bottom: 0.5px solid #daf0ff; vertical-align: middle; }
+.usage-table tbody tr:last-child td { border-bottom: none; }
+.usage-table td.num { text-align: right; font-family: monospace; color: #333; }
+.usage-table td.cost { color: #2f6010; font-family: monospace; }
+.usage-table tfoot td { padding: 7px 8px; border-top: 1px solid #bde0f7; }
+.total-label { font-weight: 500; color: #0c4a6e; font-size: 12px; }
+.total-val { text-align: right; font-weight: 500; font-family: monospace; color: #2f6010; font-size: 13px; }
+
+@media (prefers-color-scheme: dark) {
+  .badge-hit { background: #062d22; color: #4ecba5; }
+  .usage-table th { color: #60b8f0; border-color: #1a4060; }
+  .usage-table td { border-color: #0d2840; }
+  .usage-table td.num { color: #ccc; }
+  .usage-table td.cost { color: #7ec44f; }
+  .usage-table tfoot td { border-color: #1a4060; }
+  .total-label { color: #60b8f0; }
+  .total-val { color: #7ec44f; }
+}
+.usage-header { background: #e0f2fe; padding: 8px 12px; font-size: 12px; font-weight: 500; color: #0c4a6e; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.usage-header:hover { background: #d0eaf8; }
+.usage-body { padding: 10px 12px; background: #f5faff; display: flex; flex-direction: column; gap: 5px; border-top: 0.5px solid #bde0f7; }
+
+@media (prefers-color-scheme: dark) {
+  body { background: #1c1b19; color: #e8e6e0; }
+  .block { background: #242320; border-color: #38362f; }
+  .block-header:hover { background: #2c2a26; }
+  .block-body { border-color: #38362f; }
+  .sub { border-color: #38362f; }
+  .sub-header { background: #2c2a26; }
+  .sub-header:hover { background: #333028; }
+  .sub-body { background: #242320; border-color: #38362f; }
+  .sub-label { color: #999; }
+  .field-val { color: #ccc; }
+  .lbl-purple { background: #1e1a4a; color: #b0a8f5; }
+  .lbl-teal   { background: #062d22; color: #4ecba5; }
+  .lbl-amber  { background: #3a2200; color: #f0b060; }
+  .lbl-gray   { background: #2c2a26; color: #888; }
+  .lbl-white  { background: #2c2a26; color: #ccc; border-color: #444; }
+  .lbl-black  { background: #0a0a0a; color: #e0ddd4; }
+  .lbl-yellow { background: #3a3000; color: #e8c840; }
+  .lbl-red    { background: #3a0c0c; color: #f08080; }
+  .lbl-sky    { background: #062040; color: #60b8f0; }
+  .lbl-pink   { background: #3a1028; color: #f090b8; }
+  .lbl-violet { background: #2d1a4a; color: #c4a0f5; }
+  .role-user      { background: #2c2a26; color: #ccc; border-color: #444; }
+  .role-assistant { background: #1e1a4a; color: #b0a8f5; }
+  .cache-badge  { background: #3a2200; color: #f0b060; }
+  .cache-line   { background: #38362f; }
+  .thinking-block  { border-color: #3a2060; }
+  .thinking-header { background: #2d1a4a; }
+  .thinking-label  { color: #c4a0f5; }
+  .thinking-omit   { color: #7a50a0; }
+  .usage-group  { border-color: #1a4060; }
+  .usage-header { background: #0c2840; color: #60b8f0; }
+  .usage-header:hover { background: #102d4a; }
+  .usage-body   { background: #0a1e30; border-color: #1a4060; }
+  h1 { color: #555; }
+}
+</style>
+</head>
+<body>
+
+<h1>Claude API · JSON viewer</h1>
+
+<!-- ЗАПРОС -->
+<div class="block">
+  <div class="block-header" onclick="tog('req-body','req-arr')">
+    <span class="badge badge-post">POST</span>
+    <span class="blabel">Отправленный JSON</span>
+    <span class="arrow" id="req-arr">▶</span>
+  </div>
+  <div class="block-body" id="req-body" style="display:none">
+
+    <div class="fields">
+      <div class="field">
+        <span class="lbl lbl-gray">skaryna_model</span>
+        <span class="field-val">Claude Sonnet 4.6 ext</span>
+      </div>
+      <div class="field">
+        <span class="lbl lbl-purple">model</span>
+        <span class="field-val">claude-sonnet-4-6</span>
+      </div>
+      <div class="field">
+        <span class="lbl lbl-teal">max_tokens</span>
+        <span class="field-val">16000</span>
+      </div>
+    </div>
+
+    <div class="fields" style="margin-top:8px">
+      <div class="field">
+        <span class="lbl lbl-violet">thinking.type</span>
+        <span class="field-val">adaptive</span>
+      </div>
+      <div class="field">
+        <span class="lbl lbl-violet">thinking.effort</span>
+        <span class="field-val">low</span>
+      </div>
+      <div class="field">
+        <span class="lbl lbl-violet">thinking.display</span>
+        <span class="field-val">omitted</span>
+      </div>
+    </div>
+
+    <!-- system -->
+    <div class="sub">
+      <div class="sub-header" onclick="tog('sys-body','sys-arr')">
+        <span class="sub-label">system</span>
+        <span class="arrow" id="sys-arr">▶</span>
+      </div>
+      <div class="sub-body" id="sys-body" style="display:none">
+        <div class="fields">
+          <div class="field">
+            <span class="lbl lbl-gray">text</span>
+            <span class="field-val">You are a helpful assistant.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- messages -->
+    <div class="sub">
+      <div class="sub-header" onclick="tog('msg-body','msg-arr')">
+        <span class="sub-label">messages</span>
+        <span class="arrow" id="msg-arr">▶</span>
+      </div>
+      <div class="sub-body msg-inner" id="msg-body" style="display:none">
+
+        <!-- [0] -->
+        <div class="sub">
+          <div class="sub-header" onclick="tog('m0-body','m0-arr')">
+            <span class="sub-label">[0]</span>
+            <span class="arrow" id="m0-arr">▶</span>
+            <span class="role-user">user</span>
+          </div>
+          <div class="sub-body" id="m0-body" style="display:none">
+            <div class="fields">
+              <div class="field"><span class="lbl lbl-white">role</span><span class="field-val">user</span></div>
+              <div class="field"><span class="lbl lbl-amber">content</span><span class="field-val">Привет! Как дела?</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- [1] -->
+        <div class="sub">
+          <div class="sub-header" onclick="tog('m1-body','m1-arr')">
+            <span class="sub-label">[1]</span>
+            <span class="arrow" id="m1-arr">▶</span>
+            <span class="role-assistant">assistant</span>
+          </div>
+          <div class="sub-body" id="m1-body" style="display:none">
+            <div class="fields">
+              <div class="field"><span class="lbl lbl-white">role</span><span class="field-val">assistant</span></div>
+              <div class="field"><span class="lbl lbl-amber">content</span><span class="field-val">Привет! Всё отлично. Чем могу помочь?</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- cache -->
+        <div class="cache-divider">
+          <div class="cache-line"></div>
+          <div class="cache-badge">⬡ cache_control: ephemeral</div>
+          <div class="cache-line"></div>
+        </div>
+
+        <!-- [2] -->
+        <div class="sub">
+          <div class="sub-header" onclick="tog('m2-body','m2-arr')">
+            <span class="sub-label">[2]</span>
+            <span class="arrow" id="m2-arr">▶</span>
+            <span class="role-user">user</span>
+          </div>
+          <div class="sub-body" id="m2-body" style="display:none">
+            <div class="fields">
+              <div class="field"><span class="lbl lbl-white">role</span><span class="field-val">user</span></div>
+              <div class="field" style="align-items:flex-start">
+                <span class="lbl lbl-amber">content</span>
+                <div class="fields" style="flex:1">
+                  <div class="field"><span class="lbl lbl-gray">type</span><span class="field-val">text</span></div>
+                  <div class="field"><span class="lbl lbl-gray">text</span><span class="field-val">Объясни, что такое рекурсия.</span></div>
+                  <div class="field"><span class="lbl lbl-amber">cache_control</span><span class="field-val">ephemeral</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ОТВЕТ -->
+<div class="block">
+  <div class="block-header" onclick="tog('res-body','res-arr')">
+    <span class="badge badge-ok">200 OK</span>
+    <span class="blabel">Полученный JSON</span>
+    <span class="badge-hit">cache hit</span>
+    <span class="arrow" id="res-arr">▶</span>
+  </div>
+  <div class="block-body" id="res-body" style="display:none">
+    <div class="fields">
+
+      <div class="field">
+        <span class="lbl lbl-black">id</span>
+        <span class="field-val">msg_01XFDUDYJgAACzvnptvVoYEL</span>
+      </div>
+      <div class="field">
+        <span class="lbl lbl-white">type</span>
+        <span class="field-val">message</span>
+      </div>
+      <div class="field">
+        <span class="lbl lbl-white">role</span>
+        <span class="field-val">assistant</span>
+      </div>
+
+      <!-- content с thinking block -->
+      <div class="field" style="align-items:flex-start">
+        <span class="lbl lbl-yellow">content</span>
+        <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+
+          <!-- thinking -->
+          <div class="thinking-block">
+            <div class="thinking-header">
+              <span class="thinking-label">thinking</span>
+              <span class="thinking-omit">omitted</span>
+            </div>
+          </div>
+
+          <!-- text block -->
+          <div class="fields">
+            <div class="field"><span class="lbl lbl-gray">type</span><span class="field-val">text</span></div>
+            <div class="field"><span class="lbl lbl-gray">text</span><span class="field-val">Рекурсия — это способ определить функцию через саму себя...</span></div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="lbl lbl-purple">model</span>
+        <span class="field-val">claude-sonnet-4-6</span>
+      </div>
+      <div class="field">
+        <span class="lbl lbl-red">stop_reason</span>
+        <span class="field-val">end_turn</span>
+      </div>
+      <div class="field">
+        <span class="lbl lbl-red">stop_sequence</span>
+        <span class="field-val" style="color:#aaa">null</span>
+      </div>
+
+    </div>
+
+    <div class="usage-group">
+      <div class="usage-header" onclick="tog('usage-body','usage-arr')">
+        <span style="flex:1">usage</span>
+        <span class="arrow" id="usage-arr">▶</span>
+      </div>
+      <div class="usage-body" id="usage-body" style="display:none">
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>поле</th>
+              <th class="num">токены</th>
+              <th class="num">стоимость, $</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="lbl lbl-sky" style="font-size:11px">input_tokens</span></td>
+              <td class="num">48</td>
+              <td class="num cost" id="c-input"></td>
+            </tr>
+            <tr>
+              <td><span class="lbl lbl-sky" style="font-size:11px">cache_creation_input_tokens</span></td>
+              <td class="num">32</td>
+              <td class="num cost" id="c-create"></td>
+            </tr>
+            <tr>
+              <td><span class="lbl lbl-sky" style="font-size:11px">cache_read_input_tokens</span></td>
+              <td class="num">500</td>
+              <td class="num cost" id="c-read"></td>
+            </tr>
+            <tr>
+              <td><span class="lbl lbl-sky" style="font-size:11px">output_tokens</span></td>
+              <td class="num">500</td>
+              <td class="num cost" id="c-output"></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2" class="total-label">итого</td>
+              <td class="num total-val" id="c-total"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function tog(bodyId, arrId) {
+  const body = document.getElementById(bodyId);
+  const arr  = document.getElementById(arrId);
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  if (arr) arr.classList.toggle('open', open);
+}
+
+(function calcCosts() {
+  const input   = 48,  rateInput   = 3 / 1e6;
+  const create  = 32,  rateCreate  = 3 * 1.25 / 1e6;
+  const read    = 500,   rateRead    = 3 * 0.1 / 1e6;
+  const output  = 500, rateOutput  = 15 / 1e6;
+
+  const fmt = v => '$' + v.toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+
+  const cI = input  * rateInput;
+  const cC = create * rateCreate;
+  const cR = read   * rateRead;
+  const cO = output * rateOutput;
+
+  document.getElementById('c-input').textContent  = fmt(cI);
+  document.getElementById('c-create').textContent = fmt(cC);
+  document.getElementById('c-read').textContent   = fmt(cR);
+  document.getElementById('c-output').textContent = fmt(cO);
+  document.getElementById('c-total').textContent  = fmt(cI + cC + cR + cO);
+})();
+</script>
+</body>
+</html>
